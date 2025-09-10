@@ -12,9 +12,9 @@ ROOT_CA_DIR="$SCRIPT_DIR/../../results/root-ca"
 CONFIG_FILE="$SCRIPT_DIR/root-ca.conf"
 
 # Nombres de archivos
-PRIVATE_KEY="root-ca-private-key.pem"
+PRIVATE_KEY="private-key.pem"
 CSR_FILE="root-ca.csr"
-CERT_FILE="root-ca-certificate.pem"
+CERT_FILE="certificate.pem"
 
 echo "=== Generación de CA Raíz ==="
 echo "Directorio de trabajo: $ROOT_CA_DIR"
