@@ -8,12 +8,12 @@ set -e  # Salir si cualquier comando falla
 
 # Configuración
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_CA_DIR="$SCRIPT_DIR/../../results/root-ca"
+ROOT_CA_DIR="$(realpath "$SCRIPT_DIR/../../results/root-ca")"
 CONFIG_FILE="$SCRIPT_DIR/root-ca.conf"
 
 # Nombres de archivos
 PRIVATE_KEY="private-key.pem"
-CSR_FILE="root-ca.csr"
+CSR_FILE="certificate.csr"
 CERT_FILE="certificate.pem"
 
 echo "=== Generación de CA Raíz ==="
