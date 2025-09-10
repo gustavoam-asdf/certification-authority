@@ -23,8 +23,8 @@ echo "Directorio de trabajo: $ROOT_CA_DIR"
 mkdir -p "$ROOT_CA_DIR"
 
 echo ""
-echo "1. Generando par de claves RSA de 4096 bits..."
-openssl genrsa -out "$ROOT_CA_DIR/$PRIVATE_KEY" 4096
+echo "1. Generando par de claves de curva elíptica (P-384)..."
+openssl ecparam -genkey -name secp384r1 -out "$ROOT_CA_DIR/$PRIVATE_KEY"
 
 # Verificar que la clave privada se generó correctamente
 if [ ! -f "$ROOT_CA_DIR/$PRIVATE_KEY" ]; then
