@@ -8,8 +8,14 @@ set -e  # Salir si cualquier comando falla
 
 # Configuración
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_CA_DIR="$(realpath "$SCRIPT_DIR/../../results/root-ca")"
+ROOT_CA_DIR="$SCRIPT_DIR/../../results/root-ca"
 CONFIG_FILE="$SCRIPT_DIR/root-ca.conf"
+
+# Crear directorio de resultados si no existe
+mkdir -p "$ROOT_CA_DIR"
+
+# Resolver ruta absoluta después de crear el directorio
+ROOT_CA_DIR="$(realpath "$ROOT_CA_DIR")"
 
 # Nombres de archivos
 PRIVATE_KEY="private-key.pem"
@@ -19,12 +25,9 @@ CERT_FILE="certificate.pem"
 echo "=== Generación de CA Raíz ==="
 echo "Directorio de trabajo: $ROOT_CA_DIR"
 
-# Crear directorio de resultados si no existe
-mkdir -p "$ROOT_CA_DIR"
-
 echo ""
 echo "1. Generando par de claves de curva elíptica (P-384)..."
-openssl ecparam -genkey -name secp384r1 -out "$ROOT_CA_DIR/$PRIVATE_KEY"
+openssl ecparam -genkey -name secp384r1 | openssl ec -out "$ROOT_CA_DIR/$PRIVATE_KEY"
 
 # Verificar que la clave privada se generó correctamente
 if [ ! -f "$ROOT_CA_DIR/$PRIVATE_KEY" ]; then

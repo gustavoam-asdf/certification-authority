@@ -8,9 +8,13 @@ set -e  # Salir si cualquier comando falla
 
 # Configuración
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SUB_CA_DIR="$(realpath "$SCRIPT_DIR/../../results/sub-ca")"
-ROOT_CA_DIR="$(realpath "$SCRIPT_DIR/../../results/root-ca")"
+SUB_CA_DIR="$SCRIPT_DIR/../../results/sub-ca"
+ROOT_CA_DIR="$SCRIPT_DIR/../../results/root-ca"
 CONFIG_FILE="$SCRIPT_DIR/sub-ca.conf"
+
+# Resolver rutas absolutas
+SUB_CA_DIR="$(realpath "$SUB_CA_DIR" 2>/dev/null || echo "$SUB_CA_DIR")"
+ROOT_CA_DIR="$(realpath "$ROOT_CA_DIR" 2>/dev/null || echo "$ROOT_CA_DIR")"
 
 # Nombres de archivos - Sub CA
 PRIVATE_KEY="private-key.pem"
@@ -38,7 +42,7 @@ mkdir -p "$SUB_CA_DIR"
 
 echo ""
 echo "1. Generando par de claves de curva elíptica (P-384) para Sub CA..."
-openssl ecparam -genkey -name secp384r1 -out "$SUB_CA_DIR/$PRIVATE_KEY"
+openssl ecparam -genkey -name secp384r1 | openssl ec -out "$SUB_CA_DIR/$PRIVATE_KEY"
 
 # Verificar que la clave privada se generó correctamente
 if [ ! -f "$SUB_CA_DIR/$PRIVATE_KEY" ]; then
