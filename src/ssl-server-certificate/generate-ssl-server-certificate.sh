@@ -8,7 +8,7 @@ set -e  # Salir si cualquier comando falla
 
 # Configuración
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SSL_DIR="$SCRIPT_DIR/../../results/ssl-certificate"
+SSL_DIR="$SCRIPT_DIR/../../results/ssl-server-certificate"
 SUB_CA_DIR="$SCRIPT_DIR/../../results/sub-ca"
 ROOT_CA_DIR="$SCRIPT_DIR/../../results/root-ca"
 CONFIG_FILE="$SCRIPT_DIR/ssl-certificate.conf"
@@ -32,6 +32,46 @@ ROOT_CA_CERT="certificate.pem"
 
 echo "=== Generación de Certificado SSL de Servidor ==="
 echo "Directorio de trabajo: $SSL_DIR"
+echo ""
+
+# Solicitar información del dominio
+echo "Por favor, ingresa la información del dominio para el certificado SSL:"
+echo ""
+printf "Dominio principal (ej: example.com): "
+read -r DOMAIN
+
+if [ -z "$DOMAIN" ]; then
+    echo "Error: El dominio es obligatorio"
+    exit 1
+fi
+
+echo ""
+printf "¿Incluir subdominio www? (s/n) [s]: "
+read -r INCLUDE_WWW
+INCLUDE_WWW="${INCLUDE_WWW:-s}"
+
+echo ""
+printf "¿Incluir wildcard (*.$DOMAIN)? (s/n) [n]: "
+read -r INCLUDE_WILDCARD
+INCLUDE_WILDCARD="${INCLUDE_WILDCARD:-n}"
+
+echo ""
+printf "Dominios adicionales (separados por comas, opcional): "
+read -r ADDITIONAL_DOMAINS
+
+echo ""
+echo "Generando certificado para:"
+echo "  - Dominio principal: $DOMAIN"
+if [ "$INCLUDE_WWW" = "s" ] || [ "$INCLUDE_WWW" = "S" ]; then
+    echo "  - Con www: www.$DOMAIN"
+fi
+if [ "$INCLUDE_WILDCARD" = "s" ] || [ "$INCLUDE_WILDCARD" = "S" ]; then
+    echo "  - Wildcard: *.$DOMAIN"
+fi
+if [ -n "$ADDITIONAL_DOMAINS" ]; then
+    echo "  - Dominios adicionales: $ADDITIONAL_DOMAINS"
+fi
+echo ""
 
 # Verificar que existe la Sub CA
 if [ ! -f "$SUB_CA_DIR/$SUB_CA_CERT" ] || [ ! -f "$SUB_CA_DIR/$SUB_CA_KEY" ]; then
@@ -66,11 +106,73 @@ fi
 echo "   ✓ Clave privada SSL generada: $PRIVATE_KEY"
 
 echo ""
-echo "2. Generando Certificate Signing Request (CSR) para certificado SSL..."
+echo "2. Creando configuración personalizada para $DOMAIN..."
+
+# Crear archivo de configuración temporal
+TEMP_CONFIG="$SSL_DIR/temp-ssl.conf"
+
+cat > "$TEMP_CONFIG" << EOF
+# Configuración para certificado SSL de servidor
+[ req ]
+default_md = sha256
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[ req_distinguished_name ]
+countryName = PE
+stateOrProvinceName = Lima
+localityName = Lima
+organizationName = My Organization
+organizationalUnitName = Digital Security Department
+commonName = $DOMAIN
+emailAddress = ssl@$DOMAIN
+
+[ v3_req ]
+# Extensiones para certificado de servidor SSL
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = $DOMAIN
+EOF
+
+# Agregar www si se solicitó
+COUNTER=2
+if [ "$INCLUDE_WWW" = "s" ] || [ "$INCLUDE_WWW" = "S" ]; then
+    echo "DNS.$COUNTER = www.$DOMAIN" >> "$TEMP_CONFIG"
+    COUNTER=$((COUNTER + 1))
+fi
+
+# Agregar wildcard si se solicitó
+if [ "$INCLUDE_WILDCARD" = "s" ] || [ "$INCLUDE_WILDCARD" = "S" ]; then
+    echo "DNS.$COUNTER = *.$DOMAIN" >> "$TEMP_CONFIG"
+    COUNTER=$((COUNTER + 1))
+fi
+
+# Agregar dominios adicionales si se proporcionaron
+if [ -n "$ADDITIONAL_DOMAINS" ]; then
+    # Convertir comas en espacios y procesar cada dominio
+    ADDITIONAL_DOMAINS=$(echo "$ADDITIONAL_DOMAINS" | tr ',' ' ')
+    for additional_domain in $ADDITIONAL_DOMAINS; do
+        # Limpiar espacios en blanco
+        additional_domain=$(echo "$additional_domain" | tr -d ' ')
+        if [ -n "$additional_domain" ]; then
+            echo "DNS.$COUNTER = $additional_domain" >> "$TEMP_CONFIG"
+            COUNTER=$((COUNTER + 1))
+        fi
+    done
+fi
+
+echo "   ✓ Configuración personalizada creada"
+
+echo ""
+echo "3. Generando Certificate Signing Request (CSR) para certificado SSL..."
 openssl req -new \
     -key "$SSL_DIR/$PRIVATE_KEY" \
     -out "$SSL_DIR/$CSR_FILE" \
-    -config "$CONFIG_FILE"
+    -config "$TEMP_CONFIG"
 
 # Verificar que el CSR se generó correctamente
 if [ ! -f "$SSL_DIR/$CSR_FILE" ]; then
@@ -81,7 +183,7 @@ fi
 echo "   ✓ CSR SSL generado: $CSR_FILE"
 
 echo ""
-echo "3. Firmando certificado SSL con la Sub CA (válido por 1 año)..."
+echo "4. Firmando certificado SSL con la Sub CA (válido por 1 año)..."
 openssl x509 -req \
     -in "$SSL_DIR/$CSR_FILE" \
     -CA "$SUB_CA_DIR/$SUB_CA_CERT" \
@@ -90,7 +192,7 @@ openssl x509 -req \
     -out "$SSL_DIR/$CERT_FILE" \
     -days 365 \
     -extensions v3_req \
-    -extfile "$CONFIG_FILE"
+    -extfile "$TEMP_CONFIG"
 
 # Verificar que el certificado se generó correctamente
 if [ ! -f "$SSL_DIR/$CERT_FILE" ]; then
@@ -101,7 +203,7 @@ fi
 echo "   ✓ Certificado SSL firmado por Sub CA: $CERT_FILE"
 
 echo ""
-echo "4. Creando archivos de cadena de certificados..."
+echo "5. Creando archivos de cadena de certificados..."
 
 # Crear CA Chain (Sub CA + Root CA)
 echo "   • Creando caChain.pem (Sub CA + Root CA)..."
@@ -147,6 +249,9 @@ echo ""
 echo "IMPORTANTE: Mantén la clave privada SSL ($PRIVATE_KEY) en un lugar seguro."
 echo "Este archivo no debe ser compartido ni expuesto."
 echo ""
+
+# Limpiar archivo temporal
+rm -f "$TEMP_CONFIG"
 echo "=== Uso en servidores web ==="
 echo "Para Apache:"
 echo "  SSLCertificateFile    $SSL_DIR/$CERT_FILE"
